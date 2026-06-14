@@ -232,7 +232,7 @@ return (
 
 {/* 2. OPTIMIZED GOOGLE ANALYTICS INTEGRATION USING next/script */}
 <Script
-src="https://www.googletagmanager.com/gtag/js?id=G-T9664BYK5Y"
+src="https://www.googletagmanager.com/gtag/js?id=G-7H0GR0050H"
 strategy="afterInteractive"
 />
 <Script id="google-analytics" strategy="afterInteractive">
@@ -240,7 +240,7 @@ strategy="afterInteractive"
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
-gtag('config', 'G-T9664BYK5Y');
+gtag('config', 'G-7H0GR0050H');
 `}
 </Script>
 
