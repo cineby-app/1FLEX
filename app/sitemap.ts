@@ -20,7 +20,7 @@ function generalSlugify(text: string): string {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://cineby.vip';
+  const baseUrl = 'https://1flex.live';
   
   // المصفوفة النهائية التي سنجمع فيها كل الروابط النظيفة بدون أي تكرار
   const finalRoutes: MetadataRoute.Sitemap = [];
