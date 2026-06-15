@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Movie, slugify, fetchMovieVideos, fetchTVVideos } from "@/lib/tmdb";
@@ -36,6 +36,9 @@ interface InfiniteMovieRowsProps {
 
 type PopupSide = "left" | "right";
 
+// Cache for trailer keys to avoid repeated API calls
+const trailerCache = new Map<string, string | null>();
+
 function HoverPopup({
   item,
   type,
@@ -55,12 +58,47 @@ function HoverPopup({
     (item as any).first_air_date?.split("-")[0] ||
     "N/A";
 
-  const trailerKey =
-    (item as any).videos?.results?.find(
-      (video: any) =>
-        video.site === "YouTube" &&
-        (video.type === "Trailer" || video.type === "Teaser")
-    )?.key || null;
+  const [trailerKey, setTrailerKey] = useState<string | null>(null);
+  const [isLoadingTrailer, setIsLoadingTrailer] = useState(true);
+  const cacheKey = `${type}-${item.id}`;
+
+  useEffect(() => {
+    // Check cache first
+    if (trailerCache.has(cacheKey)) {
+      setTrailerKey(trailerCache.get(cacheKey) || null);
+      setIsLoadingTrailer(false);
+      return;
+    }
+
+    const fetchTrailer = async () => {
+      try {
+        let videos;
+        if (type === "movie") {
+          videos = await fetchMovieVideos(item.id.toString());
+        } else {
+          videos = await fetchTVVideos(item.id.toString());
+        }
+        
+        const trailer = videos?.find(
+          (video: any) =>
+            video.site === "YouTube" &&
+            (video.type === "Trailer" || video.type === "Teaser")
+        );
+        
+        const key = trailer?.key || null;
+        trailerCache.set(cacheKey, key);
+        setTrailerKey(key);
+      } catch (error) {
+        console.error("Error fetching trailer:", error);
+        trailerCache.set(cacheKey, null);
+        setTrailerKey(null);
+      } finally {
+        setIsLoadingTrailer(false);
+      }
+    };
+
+    fetchTrailer();
+  }, [item.id, type, cacheKey]);
 
   const coverPath = item.backdrop_path || item.poster_path;
   const posterPath = item.poster_path || item.backdrop_path;
@@ -114,9 +152,9 @@ function HoverPopup({
 
       <div className="overflow-hidden rounded-2xl max-h-[calc(100vh-24px)]">
         <div className="relative h-40 sm:h-48 w-full bg-black">
-          {trailerKey ? (
+          {!isLoadingTrailer && trailerKey ? (
             <iframe
-              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&rel=0&controls=0&modestbranding=1&playsinline=1`}
+              src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&rel=0&controls=0&modestbranding=1&playsinline=1`}
               title={`${title} Trailer`}
               className="absolute inset-0 w-full h-full border-none"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -128,8 +166,15 @@ function HoverPopup({
               alt={title}
               fill
               className="object-cover"
+              loading="lazy"
             />
           ) : null}
+
+          {isLoadingTrailer && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+              <div className="w-6 h-6 border-2 border-white/30 border-t-[#E50914] rounded-full animate-spin" />
+            </div>
+          )}
 
           <div className="absolute inset-0 bg-gradient-to-t from-[#08080d] via-black/20 to-black/10" />
         </div>
@@ -143,6 +188,7 @@ function HoverPopup({
                   alt={title}
                   fill
                   className="object-cover"
+                  loading="lazy"
                 />
               )}
             </div>
@@ -224,13 +270,20 @@ function PosterCard({
   const [isLoading, setIsLoading] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const cacheKey = `${categoryType}-${item.id}`;
 
   const slug = slugify(item.title || (item as any).name, item.id);
   const posterPath = `https://image.tmdb.org/t/p/w342${item.poster_path}`;
   const rating = item.vote_average || 0;
   const title = item.title || (item as any).name || "Untitled";
 
-  const fetchTrailer = async () => {
+  const fetchTrailer = useCallback(async () => {
+    // Check cache first
+    if (trailerCache.has(cacheKey)) {
+      setTrailerKey(trailerCache.get(cacheKey) || null);
+      return;
+    }
+
     if (trailerKey || isLoading) return;
 
     setIsLoading(true);
@@ -255,17 +308,18 @@ function PosterCard({
           (video.type === "Trailer" || video.type === "Teaser")
       );
       
-      if (trailer) {
-        setTrailerKey(trailer.key);
-      }
+      const key = trailer?.key || null;
+      trailerCache.set(cacheKey, key);
+      setTrailerKey(key);
     } catch (error: any) {
       if (error.name !== "AbortError") {
         console.error("Error fetching trailer:", error);
       }
+      trailerCache.set(cacheKey, null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [item.id, categoryType, cacheKey, trailerKey, isLoading]);
 
   const handleMouseEnter = (e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) {
@@ -317,10 +371,10 @@ function PosterCard({
         }}
       />
 
-      {isHovered && trailerKey && (
+      {isHovered && trailerKey && !isLoading && (
         <div className="absolute inset-0 z-20">
           <iframe
-            src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&rel=0&controls=0&modestbranding=1&playsinline=1&enablejsapi=1`}
+            src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&rel=0&controls=0&modestbranding=1&playsinline=1`}
             title={`${title} Trailer`}
             className="absolute inset-0 w-full h-full border-none pointer-events-none"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -373,13 +427,20 @@ const [isHovered, setIsHovered] = useState(false);
 const [isLoading, setIsLoading] = useState(false);
 const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 const abortControllerRef = useRef<AbortController | null>(null);
+const cacheKey = `${categoryType}-${item.id}`;
 
   const slug = slugify(item.title || (item as any).name, item.id);
   const coverPath = item.backdrop_path || item.poster_path;
   const rating = item.vote_average || 0;
   const title = item.title || (item as any).name || "Untitled";
 
-  const fetchTrailer = async () => {
+  const fetchTrailer = useCallback(async () => {
+    // Check cache first
+    if (trailerCache.has(cacheKey)) {
+      setTrailerKey(trailerCache.get(cacheKey) || null);
+      return;
+    }
+
     if (trailerKey || isLoading) return;
 
     setIsLoading(true);
@@ -404,17 +465,18 @@ const abortControllerRef = useRef<AbortController | null>(null);
           (video.type === "Trailer" || video.type === "Teaser")
       );
       
-      if (trailer) {
-        setTrailerKey(trailer.key);
-      }
+      const key = trailer?.key || null;
+      trailerCache.set(cacheKey, key);
+      setTrailerKey(key);
     } catch (error: any) {
       if (error.name !== "AbortError") {
         console.error("Error fetching trailer:", error);
       }
+      trailerCache.set(cacheKey, null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [item.id, categoryType, cacheKey, trailerKey, isLoading]);
 
   const handleMouseEnter = (e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) {
@@ -466,10 +528,10 @@ const abortControllerRef = useRef<AbortController | null>(null);
         }}
       />
 
-      {isHovered && trailerKey && (
+      {isHovered && trailerKey && !isLoading && (
         <div className="absolute inset-0 z-20">
           <iframe
-            src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&rel=0&controls=0&modestbranding=1&playsinline=1&enablejsapi=1`}
+            src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&rel=0&controls=0&modestbranding=1&playsinline=1`}
             title={`${title} Trailer`}
             className="absolute inset-0 w-full h-full border-none pointer-events-none"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
