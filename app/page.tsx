@@ -359,7 +359,7 @@ export default function Home() {
               WATCH YOU FAVORITE MOVIES & TV SHOWS. 
             </h1>
             <p className="text-gray-300 text-sm sm:text-base md:text-lg lg:text-xl font-mono uppercase tracking-[0.2em] max-w-2xl mx-auto mb-8 md:mb-12 px-4">
-              Scroll an infinite cinematic canvas. Discover your next favorite movie or TV show.
+              Scroll an infinite cinematic canvas. Discover your next favorite movie or TV show. by 1Flex
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
